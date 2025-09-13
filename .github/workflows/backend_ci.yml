@@ -1,10 +1,9 @@
 # Backend CI Workflow - Updated for SIT722 Task 7.1P - thoran123 - Repository: week07
-# Demonstrates continuous integration with testing and containerization# week07/.github/workflows/backend_ci.yml
+# Demonstrates continuous integration with testing and containerization
 
 name: Backend CI - Test, Build and Push Images to ACR
 
 # Trigger the workflow on pushes to the 'main' branch
-# You can also add 'pull_request:' to run on PRs
 on:
   # Manual trigger
   workflow_dispatch:
@@ -19,17 +18,15 @@ on:
 
 # Define global environment variables that can be used across jobs
 env:
-  # ACR Login Server (e.g., myregistry.azurecr.io)
-  # This needs to be set as a GitHub Repository Secret
-  ACR_LOGIN_SERVER: ${{ secrets.ACR_LOGIN_SERVER }}
+  # ACR Login Server using your secret names
+  ACR_LOGIN_SERVER: ${{ secrets.AZURE_REGISTRY_LOGIN_SERVER }}
   # Dynamically generate image tags based on Git SHA and GitHub Run ID
-  # This provides unique, traceable tags for each image build
   IMAGE_TAG: ${{ github.sha }}-${{ github.run_id }}
 
 jobs:
   # Job 1: Run tests and linting for all backend services
   test_and_lint_backends:
-    runs-on: ubuntu-latest # Use a GitHub-hosted runner
+    runs-on: ubuntu-latest
 
     services:
       # Product DB container
@@ -39,7 +36,6 @@ jobs:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: products
-        # Make pg_isready available so the service is healthy before tests run
         options: >-
           --health-cmd "pg_isready -U postgres"
           --health-interval 10s
@@ -64,29 +60,23 @@ jobs:
           --health-retries 5
 
     steps:
-      # 1. Checkout the repository code to the runner
       - name: Checkout repository
-        uses: actions/checkout@v4 # Action to check out your repository code
+        uses: actions/checkout@v4
 
-      # 2. Set up Python environment
       - name: Set up Python 3.10
-        uses: actions/setup-python@v5 # Action to set up Python environment
+        uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      # 3. Install dependencies and run code quality checks
       - name: Install dependencies
-        run: | # Use a multi-line script to install pip dependencies
+        run: |
           pip install --upgrade pip
-          # Loop through each backend service folder
           for req in backend/*/requirements.txt; do
             echo "Installing $req"
             pip install -r "$req"
           done
-          # Install CI tools
           pip install pytest httpx
 
-      # 5. Run tests for product service
       - name: Run product_service tests
         working-directory: backend/product_service
         env:
@@ -98,7 +88,6 @@ jobs:
         run: |
           pytest tests --maxfail=1 --disable-warnings -q
       
-      # 6. Run tests for order service
       - name: Run order_service tests
         working-directory: backend/order_service
         env:
@@ -119,29 +108,22 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    # Azure login using a Service Principal secret
-    - name: Azure Login
-      uses: azure/login@v1
-      with:
-        creds: ${{ secrets.AZURE_CREDENTIALS }} # Needs to be set as a GitHub Secret (Service Principal JSON)
-
-    # Login to Azure Container Registry (ACR)
+    # Login to Azure Container Registry using Docker login with ACR admin credentials
     - name: Login to Azure Container Registry
-      run: az acr login --name ${{ env.ACR_LOGIN_SERVER }}
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ secrets.AZURE_REGISTRY_LOGIN_SERVER }}
+        username: ${{ secrets.AZURE_REGISTRY_USERNAME }}
+        password: ${{ secrets.AZURE_REGISTRY_PASSWORD }}
 
     # Build and Push Docker image for Product Service
     - name: Build and Push Product Service Image
       run: |
-        docker build -t ${{ env.ACR_LOGIN_SERVER }}/product_service:latest ./backend/product_service/
-        docker push ${{ env.ACR_LOGIN_SERVER }}/product_service:latest
+        docker build -t ${{ secrets.AZURE_REGISTRY_LOGIN_SERVER }}/product_service:latest ./backend/product_service/
+        docker push ${{ secrets.AZURE_REGISTRY_LOGIN_SERVER }}/product_service:latest
 
     # Build and Push Docker image for Order Service
     - name: Build and Push Order Service Image
       run: |
-        docker build -t ${{ env.ACR_LOGIN_SERVER }}/order_service:latest ./backend/order_service/
-        docker push ${{ env.ACR_LOGIN_SERVER }}/order_service:latest
-
-    # Logout from Azure for security (runs even if image push fails)
-    - name: Logout from Azure
-      run: az logout
-      if: always()
+        docker build -t ${{ secrets.AZURE_REGISTRY_LOGIN_SERVER }}/order_service:latest ./backend/order_service/
+        docker push ${{ secrets.AZURE_REGISTRY_LOGIN_SERVER }}/order_service:latest
