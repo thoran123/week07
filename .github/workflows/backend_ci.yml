@@ -1,4 +1,5 @@
-# week07/.github/workflows/backend_ci.yml
+# Backend CI Workflow - Updated for SIT722 Task 7.1P - thoran123 - Repository: week07
+# Demonstrates continuous integration with testing and containerization# week07/.github/workflows/backend_ci.yml
 
 name: Backend CI - Test, Build and Push Images to ACR
 
